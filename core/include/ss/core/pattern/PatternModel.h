@@ -6,6 +6,7 @@
 
 #include <QMap>
 #include <QObject>
+#include <QPoint>
 #include <QString>
 
 #include <vector>
@@ -41,6 +42,14 @@ public:
     // pattern's current symbol map).
     void setCellColor(int x, int y, const QString& dmcCode);
 
+    // Sets exactly the given cells to one color in a single pass (one
+    // symbol-map rebuild, one signal) rather than N setCellColor calls.
+    // Exists mainly so undoing a color swap can restore precisely the
+    // cells that swap touched, without re-scanning by color (which would
+    // incorrectly also touch cells that already had the target color
+    // before the swap ran).
+    void setCellsColor(const std::vector<QPoint>& cells, const QString& dmcCode);
+
     // Replaces every occurrence of one DMC color with another across the
     // whole grid.
     void swapColor(const QString& fromCode, const QString& toCode);
@@ -54,6 +63,7 @@ public:
 signals:
     void patternReset();
     void cellChanged(int x, int y);
+    void cellsChanged(); // bulk change (setCellsColor); listeners should redraw everything
     void colorSwapped(const QString& fromCode, const QString& toCode);
 
 private:

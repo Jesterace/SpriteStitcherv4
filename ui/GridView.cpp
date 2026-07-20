@@ -35,6 +35,9 @@ void GridView::setPattern(PatternModel* pattern) {
         connect(m_pattern, &PatternModel::colorSwapped, this, [this](const QString&, const QString&) {
             viewport()->update();
         });
+        connect(m_pattern, &PatternModel::cellsChanged, this, [this] {
+            viewport()->update();
+        });
     }
     updateScrollRange();
     viewport()->update();

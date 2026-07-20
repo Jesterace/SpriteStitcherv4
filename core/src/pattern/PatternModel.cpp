@@ -68,6 +68,27 @@ void PatternModel::setCellColor(int x, int y, const QString& dmcCode) {
     emit cellChanged(x, y);
 }
 
+void PatternModel::setCellsColor(const std::vector<QPoint>& cells, const QString& dmcCode) {
+    if (cells.empty()) return;
+
+    if (!m_symbolMap.contains(dmcCode)) {
+        QVector<QString> codes = m_symbolMap.keys().toVector();
+        codes.push_back(dmcCode);
+        m_symbolMap = SymbolAssigner::assign(codes, m_symbolMap);
+    }
+    const QString symbol = m_symbolMap.value(dmcCode);
+
+    for (const QPoint& p : cells) {
+        if (!isValidCoord(p.x(), p.y())) continue;
+        auto& cell = m_cells[indexOf(p.x(), p.y())];
+        cell.dmcCode = dmcCode;
+        cell.symbol = symbol;
+    }
+
+    rebuildSymbolMapFromGrid();
+    emit cellsChanged();
+}
+
 void PatternModel::swapColor(const QString& fromCode, const QString& toCode) {
     if (fromCode == toCode) return;
 

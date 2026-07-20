@@ -8,11 +8,14 @@
 #include "ss/core/image/ImageLoader.h"
 #include "ss/core/pdf/PdfExporter.h"
 #include "ss/core/quantize/ColorReducer.h"
+#include "ss/core/undo/PatternCommands.h"
 
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QLabel>
+#include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QToolBar>
@@ -33,11 +36,17 @@ MainWindow::MainWindow(QWidget* parent)
     setCentralWidget(m_gridView);
 
     buildToolbar();
+    buildMenuBar();
     buildDocks();
     buildStatusBar();
 
     connect(m_gridView, &GridView::cellHovered, this, &MainWindow::onCellHovered);
     connect(m_gridView, &GridView::zoomChanged, this, &MainWindow::onZoomChanged);
+    connect(m_gridView, &GridView::cellClicked, this, &MainWindow::onCellClicked);
+    connect(m_toolPanel, &ToolPanel::swapRequested, this, &MainWindow::onSwapRequested);
+    connect(&m_pattern, &core::pattern::PatternModel::colorSwapped, this, &MainWindow::updateStatusSummary);
+    connect(&m_pattern, &core::pattern::PatternModel::cellsChanged, this, &MainWindow::updateStatusSummary);
+    connect(&m_pattern, &core::pattern::PatternModel::cellChanged, this, &MainWindow::updateStatusSummary);
 
     onZoomChanged(m_gridView->pixelsPerCell());
 }
@@ -65,6 +74,18 @@ void MainWindow::buildToolbar() {
     m_overlayToggleAction = toolbar->addAction(tr("Sprite Overlay"));
     m_overlayToggleAction->setCheckable(true);
     connect(m_overlayToggleAction, &QAction::toggled, m_gridView, &GridView::setShowSpriteOverlay);
+}
+
+void MainWindow::buildMenuBar() {
+    auto* editMenu = menuBar()->addMenu(tr("&Edit"));
+
+    QAction* undoAction = m_undoStack.createUndoAction(this, tr("Undo"));
+    undoAction->setShortcut(QKeySequence::Undo);
+    editMenu->addAction(undoAction);
+
+    QAction* redoAction = m_undoStack.createRedoAction(this, tr("Redo"));
+    redoAction->setShortcut(QKeySequence::Redo);
+    editMenu->addAction(redoAction);
 }
 
 void MainWindow::buildDocks() {
@@ -118,6 +139,7 @@ void MainWindow::openImage() {
 
     m_spriteImage = loaded->image;
     m_pattern.buildFromReduction(reduction, m_dmcMatcher, QFileInfo(path).completeBaseName());
+    m_undoStack.clear(); // importing is a new document, not an edit to undo back through
 
     m_gridView->setSpriteImage(m_spriteImage);
     m_spritePreview->setImage(m_spriteImage);
@@ -157,6 +179,25 @@ void MainWindow::onCellHovered(int x, int y) {
     }
     m_statusCoord->setText(tr("(%1, %2)  DMC %3 %4  '%5'")
                                 .arg(x).arg(y).arg(cell.dmcCode, name, cell.symbol));
+}
+
+void MainWindow::onCellClicked(int x, int y, Qt::MouseButton button) {
+    if (!m_pattern.isValidCoord(x, y)) return;
+
+    if (button == Qt::LeftButton) {
+        // Paint with the active color, if one is selected in the palette.
+        const QString activeColor = m_toolPanel->activeColor();
+        if (activeColor.isEmpty() || activeColor == m_pattern.cellAt(x, y).dmcCode) return;
+        m_undoStack.push(new core::undo::RecolorCellCommand(&m_pattern, x, y, activeColor));
+    } else if (button == Qt::RightButton) {
+        // Eyedropper: pick up this cell's color as the new active color.
+        const QString code = m_pattern.cellAt(x, y).dmcCode;
+        if (!code.isEmpty()) m_toolPanel->setActiveColor(code);
+    }
+}
+
+void MainWindow::onSwapRequested(const QString& fromCode, const QString& toCode) {
+    m_undoStack.push(new core::undo::SwapColorCommand(&m_pattern, fromCode, toCode));
 }
 
 void MainWindow::onZoomChanged(double pixelsPerCell) {

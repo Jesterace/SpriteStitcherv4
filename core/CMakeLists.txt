@@ -22,6 +22,7 @@ add_library(sscore STATIC
     src/pdf/HpdfDocument.cpp
     src/pdf/ChartPageLayout.cpp
     src/pdf/PdfExporter.cpp
+    src/undo/PatternCommands.cpp
     # Q_OBJECT headers must be listed explicitly: they live under include/,
     # outside src/, so AUTOMOC's same-directory header scan won't find them
     # otherwise.

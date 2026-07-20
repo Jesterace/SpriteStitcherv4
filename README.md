@@ -3,11 +3,11 @@
 Converts pixel art / sprite images into cross-stitch patterns, with
 Pattern Keeper-compatible PDF chart export.
 
-Status: core library, grid UI, and PDF export all working (image import,
-color reduction, DMC matching, pattern data model, zoomable/pannable grid
-view, sprite reference panel, DMC palette dock, Pattern Keeper-compatible
-PDF chart export). Editing tools (recolor/swap/undo) and project
-save/load land in later phases.
+Status: core library, grid UI, PDF export, and editing tools all working
+(image import, color reduction, DMC matching, pattern data model,
+zoomable/pannable grid view, sprite reference panel, DMC palette dock,
+Pattern Keeper-compatible PDF chart export, cell recoloring, project-wide
+color swap, full undo/redo). Project save/load lands in a later phase.
 
 ## Dependencies
 
@@ -57,6 +57,12 @@ ctest --test-dir build --output-on-failure
 
 Use "Open Image..." to import a PNG/JPG/BMP sprite; you'll be asked
 whether to match colors exactly or reduce to a target color count first.
+
+Editing: click a row in the Palette dock to pick the active color, then
+left-click a grid cell to paint it; right-click a cell to pick up its
+color as the new active color (eyedropper). Use the Swap section to
+replace one DMC color with another across the whole pattern. Undo/Redo
+are in the Edit menu (Ctrl+Z / Ctrl+Shift+Z).
 
 ## PDF export
 

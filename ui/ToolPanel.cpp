@@ -1,6 +1,11 @@
 #include "ToolPanel.h"
 
+#include <QComboBox>
+#include <QCompleter>
+#include <QHBoxLayout>
 #include <QHeaderView>
+#include <QLabel>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -12,6 +17,7 @@ constexpr int kColCode = 1;
 constexpr int kColName = 2;
 constexpr int kColSymbol = 3;
 constexpr int kColCount = 4;
+constexpr int kCodeRole = Qt::UserRole;
 } // namespace
 
 ToolPanel::ToolPanel(QWidget* parent) : QWidget(parent) {
@@ -25,9 +31,67 @@ ToolPanel::ToolPanel(QWidget* parent) : QWidget(parent) {
     m_table->setColumnWidth(kColSwatch, 24);
     m_table->horizontalHeader()->setSectionResizeMode(kColName, QHeaderView::Stretch);
 
+    connect(m_table, &QTableWidget::itemSelectionChanged, this, [this] {
+        const auto selected = m_table->selectedItems();
+        if (selected.isEmpty()) return;
+        const int row = selected.first()->row();
+        auto* swatchItem = m_table->item(row, kColSwatch);
+        if (swatchItem) setActiveColor(swatchItem->data(kCodeRole).toString());
+    });
+
+    m_activeColorLabel = new QLabel(tr("Active color: none (click a palette row)"), this);
+    m_activeColorLabel->setWordWrap(true);
+
+    m_swapToCombo = new QComboBox(this);
+    m_swapToCombo->setEditable(true);
+    m_swapToCombo->setInsertPolicy(QComboBox::NoInsert);
+    m_swapToCombo->setPlaceholderText(tr("Swap to..."));
+    connect(m_swapToCombo, &QComboBox::currentIndexChanged, this, &ToolPanel::updateSwapButtonEnabled);
+    connect(m_swapToCombo, &QComboBox::editTextChanged, this, &ToolPanel::updateSwapButtonEnabled);
+
+    m_swapButton = new QPushButton(tr("Swap"), this);
+    m_swapButton->setEnabled(false);
+    m_swapButton->setToolTip(tr("Replace the active color with the selected color everywhere in the pattern."));
+    connect(m_swapButton, &QPushButton::clicked, this, [this] {
+        const int idx = m_swapToCombo->currentIndex();
+        if (idx < 0) return;
+        const QString toCode = m_swapToCombo->itemData(idx).toString();
+        if (m_activeColor.isEmpty() || toCode.isEmpty() || toCode == m_activeColor) return;
+        emit swapRequested(m_activeColor, toCode);
+    });
+
+    auto* swapRow = new QHBoxLayout;
+    swapRow->addWidget(m_swapToCombo, 1);
+    swapRow->addWidget(m_swapButton);
+
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
-    layout->addWidget(m_table);
+    layout->addWidget(m_table, 1);
+    layout->addWidget(m_activeColorLabel);
+    layout->addLayout(swapRow);
+}
+
+void ToolPanel::setDmcTable(const core::dmc::DmcTable* table) {
+    m_dmcTable = table;
+    populateSwapCombo();
+}
+
+void ToolPanel::populateSwapCombo() {
+    m_swapToCombo->clear();
+    if (!m_dmcTable) return;
+
+    for (const auto& c : m_dmcTable->colors()) {
+        const QString code = QString::fromLatin1(c.code);
+        const QString name = QString::fromLatin1(c.name);
+        m_swapToCombo->addItem(QStringLiteral("%1  %2").arg(code, name), code);
+    }
+    m_swapToCombo->setCurrentIndex(-1);
+
+    auto* completer = new QCompleter(m_swapToCombo->model(), m_swapToCombo);
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->setFilterMode(Qt::MatchContains);
+    completer->setCompletionMode(QCompleter::PopupCompletion);
+    m_swapToCombo->setCompleter(completer);
 }
 
 void ToolPanel::setPattern(core::pattern::PatternModel* pattern) {
@@ -39,8 +103,50 @@ void ToolPanel::setPattern(core::pattern::PatternModel* pattern) {
         connect(m_pattern, &core::pattern::PatternModel::patternReset, this, &ToolPanel::refresh);
         connect(m_pattern, &core::pattern::PatternModel::cellChanged, this, &ToolPanel::refresh);
         connect(m_pattern, &core::pattern::PatternModel::colorSwapped, this, &ToolPanel::refresh);
+        connect(m_pattern, &core::pattern::PatternModel::cellsChanged, this, &ToolPanel::refresh);
     }
+    setActiveColor(QString());
     refresh();
+}
+
+void ToolPanel::setActiveColor(const QString& dmcCode) {
+    if (m_activeColor == dmcCode) return;
+    m_activeColor = dmcCode;
+
+    m_table->blockSignals(true);
+    m_table->clearSelection();
+    if (!dmcCode.isEmpty()) {
+        for (int row = 0; row < m_table->rowCount(); ++row) {
+            auto* swatchItem = m_table->item(row, kColSwatch);
+            if (swatchItem && swatchItem->data(kCodeRole).toString() == dmcCode) {
+                m_table->selectRow(row);
+                break;
+            }
+        }
+    }
+    m_table->blockSignals(false);
+
+    updateActiveColorLabel();
+    updateSwapButtonEnabled();
+    emit activeColorChanged(m_activeColor);
+}
+
+void ToolPanel::updateActiveColorLabel() {
+    if (m_activeColor.isEmpty() || !m_dmcTable) {
+        m_activeColorLabel->setText(tr("Active color: none (click a palette row)"));
+        return;
+    }
+    QString name = tr("Unknown");
+    if (auto c = m_dmcTable->findByCode(m_activeColor.toStdString())) {
+        name = QString::fromLatin1(c->name);
+    }
+    m_activeColorLabel->setText(tr("Active color: DMC %1 %2 — click a cell to paint it").arg(m_activeColor, name));
+}
+
+void ToolPanel::updateSwapButtonEnabled() {
+    const int idx = m_swapToCombo->currentIndex();
+    const QString toCode = idx >= 0 ? m_swapToCombo->itemData(idx).toString() : QString();
+    m_swapButton->setEnabled(!m_activeColor.isEmpty() && !toCode.isEmpty() && toCode != m_activeColor);
 }
 
 void ToolPanel::refresh() {
@@ -65,6 +171,7 @@ void ToolPanel::refresh() {
 
         auto* swatchItem = new QTableWidgetItem();
         swatchItem->setBackground(swatchColor);
+        swatchItem->setData(kCodeRole, code);
         m_table->setItem(row, kColSwatch, swatchItem);
         m_table->setItem(row, kColCode, new QTableWidgetItem(code));
         m_table->setItem(row, kColName, new QTableWidgetItem(name));
@@ -72,7 +179,14 @@ void ToolPanel::refresh() {
         auto* countItem = new QTableWidgetItem();
         countItem->setData(Qt::DisplayRole, count);
         m_table->setItem(row, kColCount, countItem);
+
+        if (code == m_activeColor) {
+            m_table->selectRow(row);
+        }
     }
+
+    updateActiveColorLabel();
+    updateSwapButtonEnabled();
 }
 
 } // namespace ss::ui

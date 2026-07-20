@@ -5,6 +5,7 @@
 #include "ss/core/pattern/PatternModel.h"
 
 #include <QMainWindow>
+#include <QUndoStack>
 
 class QAction;
 class QLabel;
@@ -26,9 +27,12 @@ private slots:
     void exportPdf();
     void onCellHovered(int x, int y);
     void onZoomChanged(double pixelsPerCell);
+    void onCellClicked(int x, int y, Qt::MouseButton button);
+    void onSwapRequested(const QString& fromCode, const QString& toCode);
 
 private:
     void buildToolbar();
+    void buildMenuBar();
     void buildDocks();
     void buildStatusBar();
     void updateStatusSummary();
@@ -37,6 +41,7 @@ private:
     core::dmc::DmcMatcher m_dmcMatcher;
     core::pattern::PatternModel m_pattern;
     QImage m_spriteImage;
+    QUndoStack m_undoStack;
 
     GridView* m_gridView;
     SpritePreviewPanel* m_spritePreview;

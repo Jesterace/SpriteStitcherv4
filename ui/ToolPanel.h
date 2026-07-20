@@ -6,13 +6,16 @@
 #include <QWidget>
 
 class QTableWidget;
+class QComboBox;
+class QLabel;
+class QPushButton;
 
 namespace ss::ui {
 
-// The one contextual dock: DMC palette for the current pattern. Color swap
-// and cell-edit sections are added in a later phase; kept as a single
-// sectioned panel rather than separate toolbars/docks per the UI design
-// rules for this app.
+// The one contextual dock, sectioned rather than split into separate
+// toolbars/docks: DMC palette (click a row to pick the active color for
+// painting cells), color swap, and the active-color indicator that doubles
+// as cell-edit feedback.
 class ToolPanel : public QWidget {
     Q_OBJECT
 
@@ -20,15 +23,32 @@ public:
     explicit ToolPanel(QWidget* parent = nullptr);
 
     void setPattern(core::pattern::PatternModel* pattern);
-    void setDmcTable(const core::dmc::DmcTable* table) { m_dmcTable = table; }
+    void setDmcTable(const core::dmc::DmcTable* table);
+
+    QString activeColor() const { return m_activeColor; }
 
 public slots:
     void refresh();
+    void setActiveColor(const QString& dmcCode);
+
+signals:
+    void activeColorChanged(const QString& dmcCode);
+    void swapRequested(const QString& fromCode, const QString& toCode);
 
 private:
     core::pattern::PatternModel* m_pattern = nullptr;
     const core::dmc::DmcTable* m_dmcTable = nullptr;
+
     QTableWidget* m_table;
+    QLabel* m_activeColorLabel;
+    QComboBox* m_swapToCombo;
+    QPushButton* m_swapButton;
+
+    QString m_activeColor;
+
+    void populateSwapCombo();
+    void updateActiveColorLabel();
+    void updateSwapButtonEnabled();
 };
 
 } // namespace ss::ui
