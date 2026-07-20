@@ -51,10 +51,29 @@ ctest --test-dir build --output-on-failure
   floss table (`core/src/dmc/DmcTableData.cpp`) from source data; not
   part of the build.
 
+## Installing (optional)
+
+Installs a launcher entry and icon for your desktop's app menu, on top
+of the plain `./build/app/spritestitcher` binary:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+cmake --build build
+cmake --install build
+kbuildsycoca6 --noincremental   # KDE only — refreshes the app menu immediately
+```
+
+Installs the binary to `~/.local/bin` (make sure that's on your
+`PATH`), plus a `.desktop` entry and icon under `~/.local/share`. Drop
+`-DCMAKE_INSTALL_PREFIX` (or point it at `/usr/local`) for a system-wide
+install instead.
+
 ## Running
 
 ```sh
 ./build/app/spritestitcher
+# or, if installed:
+spritestitcher
 ```
 
 Use "Open Image..." to import a PNG/JPG/BMP sprite; you'll be asked

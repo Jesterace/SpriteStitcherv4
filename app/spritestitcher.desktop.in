@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SpriteStitcher
+Comment=Convert pixel art into cross-stitch patterns
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/spritestitcher
+Icon=spritestitcher
+Terminal=false
+Categories=Graphics;
