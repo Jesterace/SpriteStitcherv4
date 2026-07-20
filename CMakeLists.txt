@@ -13,6 +13,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
 endif()
 
+# Kept on by default (not just for a one-off cleanup pass) so new code
+# can't quietly regress. Gated by compiler ID rather than applied
+# unconditionally since MSVC uses different flags for the same thing —
+# relevant once a Windows build exists.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra)
+endif()
+
 enable_testing()
 
 add_subdirectory(core)

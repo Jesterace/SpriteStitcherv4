@@ -3,12 +3,13 @@
 Converts pixel art / sprite images into cross-stitch patterns, with
 Pattern Keeper-compatible PDF chart export.
 
-Status: feature-complete for its core path — image import, color
-reduction, DMC matching, pattern data model, zoomable/pannable grid view,
-sprite reference panel, DMC palette dock, Pattern Keeper-compatible PDF
-chart export, cell recoloring, project-wide color swap, full undo/redo,
-and native JSON project save/load. Remaining: a compiler-warnings cleanup
-pass.
+Status: feature-complete — image import, color reduction, DMC matching,
+pattern data model, zoomable/pannable grid view, sprite reference panel,
+DMC palette dock, Pattern Keeper-compatible PDF chart export, cell
+recoloring, project-wide color swap, full undo/redo, and native JSON
+project save/load. Builds warning-clean with `-Wall -Wextra` (GCC) and
+`-Wall -Wextra` (Clang), enforced by default in the top-level
+`CMakeLists.txt`.
 
 ## Dependencies
 
@@ -85,6 +86,13 @@ Small patterns render as a single page (header + chart + DMC legend).
 Patterns too large to stay legible at a 10pt minimum cell size on one
 page are automatically tiled across multiple numbered pages, with a
 dedicated info page (header + full legend) first.
+
+## Portability
+
+Developed and tested on Linux. The core library avoids Linux-only APIs
+(paths/filesystem go through `QString`/`QImage`/`QFile`, no POSIX calls),
+so a Windows build should mainly be a matter of getting Qt 6 and libharu
+on that platform — not a rewrite. Not yet built or tested on Windows.
 
 ## DMC color data
 
