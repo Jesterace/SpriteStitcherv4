@@ -23,6 +23,7 @@ public:
 
 private slots:
     void openImage();
+    void exportPdf();
     void onCellHovered(int x, int y);
     void onZoomChanged(double pixelsPerCell);
 
@@ -43,6 +44,7 @@ private:
 
     QAction* m_gridToggleAction;
     QAction* m_overlayToggleAction;
+    QAction* m_exportAction;
 
     QLabel* m_statusCoord;
     QLabel* m_statusZoom;

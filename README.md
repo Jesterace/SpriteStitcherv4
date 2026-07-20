@@ -3,22 +3,29 @@
 Converts pixel art / sprite images into cross-stitch patterns, with
 Pattern Keeper-compatible PDF chart export.
 
-Status: core library and grid UI working (image import, color reduction,
-DMC matching, pattern data model, zoomable/pannable grid view, sprite
-reference panel, DMC palette dock). PDF export and editing tools land in
-later phases.
+Status: core library, grid UI, and PDF export all working (image import,
+color reduction, DMC matching, pattern data model, zoomable/pannable grid
+view, sprite reference panel, DMC palette dock, Pattern Keeper-compatible
+PDF chart export). Editing tools (recolor/swap/undo) and project
+save/load land in later phases.
 
 ## Dependencies
 
 - CMake 3.21+
 - A C++17 compiler
 - Qt 6 (Core, Gui, Widgets)
-- [libharu](http://libharu.org/) (PDF export, once that phase lands)
+- [libharu](http://libharu.org/) (PDF export)
 
 On Arch Linux:
 
 ```sh
 sudo pacman -S cmake qt6-base libharu
+```
+
+On Debian/Ubuntu:
+
+```sh
+sudo apt install cmake qt6-base-dev libhpdf-dev
 ```
 
 ## Building
@@ -50,6 +57,22 @@ ctest --test-dir build --output-on-failure
 
 Use "Open Image..." to import a PNG/JPG/BMP sprite; you'll be asked
 whether to match colors exactly or reduce to a target color count first.
+
+## PDF export
+
+`core/src/pdf/` renders charts with [libharu](http://libharu.org/) using
+**only** base-14 Helvetica with a single-byte `StandardEncoding`font —
+never a CID/Identity-H (two-byte) font path, and never Qt's own PDF
+facilities. This is a hard requirement: earlier attempts using
+`QPdfWriter`'s default CID/Identity-H text encoding produced PDFs that
+Pattern Keeper could not parse. `core/tests/pdf_export_test.cpp` asserts
+this directly by grepping the generated PDF bytes for `Identity-H`,
+`/Type0`, and `CIDFontType` and failing if any are present.
+
+Small patterns render as a single page (header + chart + DMC legend).
+Patterns too large to stay legible at a 10pt minimum cell size on one
+page are automatically tiled across multiple numbered pages, with a
+dedicated info page (header + full legend) first.
 
 ## DMC color data
 

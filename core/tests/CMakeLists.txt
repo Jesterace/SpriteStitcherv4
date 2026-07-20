@@ -9,3 +9,7 @@ add_test(NAME color_reduce_test COMMAND color_reduce_test)
 add_executable(pattern_model_test pattern_model_test.cpp)
 target_link_libraries(pattern_model_test PRIVATE sscore)
 add_test(NAME pattern_model_test COMMAND pattern_model_test)
+
+add_executable(pdf_export_test pdf_export_test.cpp)
+target_link_libraries(pdf_export_test PRIVATE sscore)
+add_test(NAME pdf_export_test COMMAND pdf_export_test)

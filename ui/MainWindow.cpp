@@ -6,6 +6,7 @@
 #include "dialogs/ImportOptionsDialog.h"
 
 #include "ss/core/image/ImageLoader.h"
+#include "ss/core/pdf/PdfExporter.h"
 #include "ss/core/quantize/ColorReducer.h"
 
 #include <QDockWidget>
@@ -47,6 +48,8 @@ void MainWindow::buildToolbar() {
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
     toolbar->addAction(tr("Open Image..."), this, &MainWindow::openImage);
+    m_exportAction = toolbar->addAction(tr("Export PDF..."), this, &MainWindow::exportPdf);
+    m_exportAction->setEnabled(false);
     toolbar->addSeparator();
 
     toolbar->addAction(tr("Zoom Out"), m_gridView, &GridView::zoomOut);
@@ -120,7 +123,22 @@ void MainWindow::openImage() {
     m_spritePreview->setImage(m_spriteImage);
     m_gridView->zoomToFit();
 
+    m_exportAction->setEnabled(true);
     updateStatusSummary();
+}
+
+void MainWindow::exportPdf() {
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Export PDF Chart"), m_pattern.name() + ".pdf", tr("PDF Files (*.pdf)"));
+    if (path.isEmpty()) return;
+
+    core::pdf::ExportOptions options;
+    options.patternName = m_pattern.name();
+
+    QString error;
+    if (!core::pdf::PdfExporter::exportToPdf(m_pattern, m_dmcTable, path, options, &error)) {
+        QMessageBox::warning(this, tr("Export Failed"), error);
+    }
 }
 
 void MainWindow::onCellHovered(int x, int y) {
