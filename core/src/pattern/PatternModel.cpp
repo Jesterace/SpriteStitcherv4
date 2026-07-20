@@ -40,6 +40,25 @@ void PatternModel::buildFromReduction(const quantize::ReductionResult& reduction
     emit patternReset();
 }
 
+void PatternModel::loadFromSaved(int width, int height, const QString& name,
+                                  const std::vector<QString>& cellCodes,
+                                  const QMap<QString, QString>& symbolMap) {
+    m_width = width;
+    m_height = height;
+    m_name = name;
+    m_cells.assign(static_cast<size_t>(width) * height, PatternCell{});
+    m_symbolMap = symbolMap;
+
+    for (size_t i = 0; i < cellCodes.size() && i < m_cells.size(); ++i) {
+        m_cells[i].dmcCode = cellCodes[i];
+    }
+
+    // Defensive against a stale/partial symbol map on disk: fills in
+    // anything missing while keeping the loaded assignments stable.
+    rebuildSymbolMapFromGrid();
+    emit patternReset();
+}
+
 void PatternModel::setName(const QString& name) {
     m_name = name;
 }

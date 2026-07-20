@@ -30,6 +30,15 @@ public:
                              const dmc::DmcMatcher& matcher,
                              const QString& name = QString());
 
+    // Restores a pattern from already-resolved DMC codes (project file
+    // load) — no DMC matching involved. `cellCodes` is row-major,
+    // width*height entries. `symbolMap` is honored as-is where possible
+    // (kept stable across save/load) and only filled in for codes it's
+    // missing.
+    void loadFromSaved(int width, int height, const QString& name,
+                        const std::vector<QString>& cellCodes,
+                        const QMap<QString, QString>& symbolMap);
+
     int width() const { return m_width; }
     int height() const { return m_height; }
     QString name() const { return m_name; }

@@ -17,3 +17,7 @@ add_test(NAME pdf_export_test COMMAND pdf_export_test)
 add_executable(undo_test undo_test.cpp)
 target_link_libraries(undo_test PRIVATE sscore)
 add_test(NAME undo_test COMMAND undo_test)
+
+add_executable(project_serializer_test project_serializer_test.cpp)
+target_link_libraries(project_serializer_test PRIVATE sscore)
+add_test(NAME project_serializer_test COMMAND project_serializer_test)

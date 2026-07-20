@@ -7,9 +7,11 @@
 
 #include "ss/core/image/ImageLoader.h"
 #include "ss/core/pdf/PdfExporter.h"
+#include "ss/core/project/ProjectSerializer.h"
 #include "ss/core/quantize/ColorReducer.h"
 #include "ss/core/undo/PatternCommands.h"
 
+#include <QCloseEvent>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -36,8 +38,8 @@ MainWindow::MainWindow(QWidget* parent)
     setCentralWidget(m_gridView);
 
     buildToolbar();
-    buildMenuBar();
     buildDocks();
+    buildMenuBar();
     buildStatusBar();
 
     connect(m_gridView, &GridView::cellHovered, this, &MainWindow::onCellHovered);
@@ -47,8 +49,10 @@ MainWindow::MainWindow(QWidget* parent)
     connect(&m_pattern, &core::pattern::PatternModel::colorSwapped, this, &MainWindow::updateStatusSummary);
     connect(&m_pattern, &core::pattern::PatternModel::cellsChanged, this, &MainWindow::updateStatusSummary);
     connect(&m_pattern, &core::pattern::PatternModel::cellChanged, this, &MainWindow::updateStatusSummary);
+    connect(&m_undoStack, &QUndoStack::cleanChanged, this, &MainWindow::updateWindowTitle);
 
     onZoomChanged(m_gridView->pixelsPerCell());
+    updateWindowTitle();
 }
 
 void MainWindow::buildToolbar() {
@@ -57,6 +61,8 @@ void MainWindow::buildToolbar() {
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
     toolbar->addAction(tr("Open Image..."), this, &MainWindow::openImage);
+    m_saveProjectAction = toolbar->addAction(tr("Save Project"), this, &MainWindow::saveProject);
+    m_saveProjectAction->setEnabled(false);
     m_exportAction = toolbar->addAction(tr("Export PDF..."), this, &MainWindow::exportPdf);
     m_exportAction->setEnabled(false);
     toolbar->addSeparator();
@@ -77,6 +83,23 @@ void MainWindow::buildToolbar() {
 }
 
 void MainWindow::buildMenuBar() {
+    auto* fileMenu = menuBar()->addMenu(tr("&File"));
+
+    QAction* openProjectAction = fileMenu->addAction(tr("Open Project..."), this, &MainWindow::openProject);
+    openProjectAction->setShortcut(QKeySequence::Open);
+
+    QAction* saveAction = fileMenu->addAction(tr("Save Project"), this, &MainWindow::saveProject);
+    saveAction->setShortcut(QKeySequence::Save);
+
+    QAction* saveAsAction = fileMenu->addAction(tr("Save Project As..."), this, &MainWindow::saveProjectAs);
+    saveAsAction->setShortcut(QKeySequence::SaveAs);
+
+    fileMenu->addSeparator();
+    fileMenu->addAction(tr("Import Sprite Image..."), this, &MainWindow::openImage);
+    fileMenu->addAction(tr("Export PDF..."), this, &MainWindow::exportPdf);
+    fileMenu->addSeparator();
+    fileMenu->addAction(tr("Quit"), this, &QWidget::close)->setShortcut(QKeySequence::Quit);
+
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
 
     QAction* undoAction = m_undoStack.createUndoAction(this, tr("Undo"));
@@ -86,15 +109,20 @@ void MainWindow::buildMenuBar() {
     QAction* redoAction = m_undoStack.createRedoAction(this, tr("Redo"));
     redoAction->setShortcut(QKeySequence::Redo);
     editMenu->addAction(redoAction);
+
+    auto* viewMenu = menuBar()->addMenu(tr("&View"));
+    viewMenu->addAction(m_gridToggleAction);
+    viewMenu->addAction(m_overlayToggleAction);
+    viewMenu->addAction(m_spriteDock->toggleViewAction());
 }
 
 void MainWindow::buildDocks() {
     m_spritePreview = new SpritePreviewPanel(this);
-    auto* spriteDock = new QDockWidget(tr("Sprite Reference"), this);
-    spriteDock->setWidget(m_spritePreview);
-    spriteDock->setObjectName("spriteDock");
-    addDockWidget(Qt::LeftDockWidgetArea, spriteDock);
-    spriteDock->hide(); // available on demand; the overlay toggle covers the quick case
+    m_spriteDock = new QDockWidget(tr("Sprite Reference"), this);
+    m_spriteDock->setWidget(m_spritePreview);
+    m_spriteDock->setObjectName("spriteDock");
+    addDockWidget(Qt::LeftDockWidgetArea, m_spriteDock);
+    m_spriteDock->hide(); // available on demand; the overlay toggle covers the quick case
 
     m_toolPanel = new ToolPanel(this);
     m_toolPanel->setDmcTable(&m_dmcTable);
@@ -116,6 +144,8 @@ void MainWindow::buildStatusBar() {
 }
 
 void MainWindow::openImage() {
+    if (!confirmDiscardUnsavedChanges()) return;
+
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Open Sprite Image"), QString(), tr("Images (*.png *.jpg *.jpeg *.bmp)"));
     if (path.isEmpty()) return;
@@ -139,14 +169,103 @@ void MainWindow::openImage() {
 
     m_spriteImage = loaded->image;
     m_pattern.buildFromReduction(reduction, m_dmcMatcher, QFileInfo(path).completeBaseName());
-    m_undoStack.clear(); // importing is a new document, not an edit to undo back through
+    m_currentProjectPath.clear(); // a fresh import isn't tied to any saved project file yet
+    m_undoStack.clear();          // importing is a new document, not an edit to undo back through
 
+    loadPatternIntoUi();
+}
+
+void MainWindow::openProject() {
+    if (!confirmDiscardUnsavedChanges()) return;
+
+    const QString path = QFileDialog::getOpenFileName(
+        this, tr("Open Project"), QString(), tr("SpriteStitcher Projects (*.sstitch)"));
+    if (path.isEmpty()) return;
+
+    QString error;
+    auto loaded = core::project::ProjectSerializer::load(path, &error);
+    if (!loaded) {
+        QMessageBox::warning(this, tr("Open Failed"), error);
+        return;
+    }
+
+    m_spriteImage = loaded->spriteImage;
+    m_pattern.loadFromSaved(loaded->width, loaded->height, loaded->name, loaded->cellCodes, loaded->symbolMap);
+    m_currentProjectPath = path;
+    m_undoStack.clear();
+    m_undoStack.setClean();
+
+    loadPatternIntoUi();
+}
+
+bool MainWindow::saveProject() {
+    if (m_currentProjectPath.isEmpty()) return saveProjectAs();
+
+    QString error;
+    if (!core::project::ProjectSerializer::save(m_pattern, m_spriteImage, m_currentProjectPath, &error)) {
+        QMessageBox::warning(this, tr("Save Failed"), error);
+        return false;
+    }
+    m_undoStack.setClean();
+    return true;
+}
+
+bool MainWindow::saveProjectAs() {
+    const QString suggested = (m_pattern.name().isEmpty() ? tr("Untitled") : m_pattern.name()) + ".sstitch";
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save Project As"), suggested,
+                                                        tr("SpriteStitcher Projects (*.sstitch)"));
+    if (path.isEmpty()) return false;
+
+    QString error;
+    if (!core::project::ProjectSerializer::save(m_pattern, m_spriteImage, path, &error)) {
+        QMessageBox::warning(this, tr("Save Failed"), error);
+        return false;
+    }
+    m_currentProjectPath = path;
+    m_undoStack.setClean();
+    updateWindowTitle();
+    return true;
+}
+
+bool MainWindow::confirmDiscardUnsavedChanges() {
+    if (m_pattern.width() == 0 || m_undoStack.isClean()) return true;
+
+    const auto choice = QMessageBox::question(
+        this, tr("Unsaved Changes"), tr("This pattern has unsaved changes. Save before continuing?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+
+    if (choice == QMessageBox::Cancel) return false;
+    if (choice == QMessageBox::Save) return saveProject();
+    return true; // Discard
+}
+
+void MainWindow::loadPatternIntoUi() {
     m_gridView->setSpriteImage(m_spriteImage);
     m_spritePreview->setImage(m_spriteImage);
     m_gridView->zoomToFit();
 
     m_exportAction->setEnabled(true);
+    m_saveProjectAction->setEnabled(true);
     updateStatusSummary();
+    updateWindowTitle();
+}
+
+void MainWindow::updateWindowTitle() {
+    if (m_pattern.width() == 0) {
+        setWindowTitle(tr("SpriteStitcher"));
+        return;
+    }
+    const QString name = m_pattern.name().isEmpty() ? tr("Untitled") : m_pattern.name();
+    const QString dirty = m_undoStack.isClean() ? QString() : tr("*");
+    setWindowTitle(tr("%1%2 — SpriteStitcher").arg(name, dirty));
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (confirmDiscardUnsavedChanges()) {
+        event->accept();
+    } else {
+        event->ignore();
+    }
 }
 
 void MainWindow::exportPdf() {
