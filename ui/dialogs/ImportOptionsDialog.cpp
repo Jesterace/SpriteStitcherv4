@@ -1,5 +1,6 @@
 #include "ImportOptionsDialog.h"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLabel>
@@ -28,6 +29,12 @@ ImportOptionsDialog::ImportOptionsDialog(QWidget* parent) : QDialog(parent) {
 
     connect(m_quantizeRadio, &QRadioButton::toggled, m_colorCountSpin, &QSpinBox::setEnabled);
 
+    m_removeBackgroundCheck = new QCheckBox(tr("Treat background as unstitched"));
+    m_removeBackgroundCheck->setToolTip(
+        tr("Samples the background color from the image's corners and leaves\n"
+           "matching pixels unstitched instead of assigning them a DMC color.\n"
+           "Images with real transparency are always treated this way regardless."));
+
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -36,6 +43,7 @@ ImportOptionsDialog::ImportOptionsDialog(QWidget* parent) : QDialog(parent) {
     form->addRow(m_exactRadio);
     form->addRow(m_quantizeRadio);
     form->addRow(tr("Target colors:"), m_colorCountSpin);
+    form->addRow(m_removeBackgroundCheck);
 
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(form);
@@ -48,6 +56,10 @@ ImportOptionsDialog::Mode ImportOptionsDialog::mode() const {
 
 int ImportOptionsDialog::targetColorCount() const {
     return m_colorCountSpin->value();
+}
+
+bool ImportOptionsDialog::removeBackground() const {
+    return m_removeBackgroundCheck->isChecked();
 }
 
 } // namespace ss::ui

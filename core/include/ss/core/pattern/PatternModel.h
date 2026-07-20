@@ -66,8 +66,11 @@ public:
     const QMap<QString, QString>& symbolMap() const { return m_symbolMap; }
 
     // DMC code -> number of stitches currently using it. Recomputed from
-    // the grid each call.
+    // the grid each call. Blank/unstitched cells are excluded.
     QMap<QString, int> colorCounts() const;
+
+    // Number of blank (unstitched/background) cells in the grid.
+    int blankCellCount() const;
 
 signals:
     void patternReset();

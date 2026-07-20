@@ -16,6 +16,7 @@ add_library(sscore STATIC
     src/dmc/DmcMatcher.cpp
     src/dmc/DmcTableData.cpp
     src/image/ImageLoader.cpp
+    src/image/BackgroundDetector.cpp
     src/quantize/ColorReducer.cpp
     src/pattern/SymbolAssigner.cpp
     src/pattern/PatternModel.cpp

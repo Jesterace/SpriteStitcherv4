@@ -79,11 +79,22 @@ spritestitcher
 Use "Open Image..." to import a PNG/JPG/BMP sprite; you'll be asked
 whether to match colors exactly or reduce to a target color count first.
 
+**Background / unstitched cells:** sprites with real alpha transparency
+always have their transparent pixels left unstitched automatically. For
+sprites exported on a flat background color instead (the common case),
+check "Treat background as unstitched" in the import dialog — it samples
+the color from the image's corners and drops matching pixels from the
+pattern rather than assigning them a DMC color. The Palette dock shows
+an "Unstitched" row (cross-hatched swatch) with the blank-cell count;
+selecting it and clicking/painting cells manually erases them, for
+touching up whatever the auto-detection missed.
+
 Editing: click a row in the Palette dock to pick the active color, then
 left-click a grid cell to paint it; right-click a cell to pick up its
-color as the new active color (eyedropper). Use the Swap section to
-replace one DMC color with another across the whole pattern. Undo/Redo
-are in the Edit menu (Ctrl+Z / Ctrl+Shift+Z).
+color as the new active color (eyedropper — this also works on blank
+cells, arming the eraser). Use the Swap section to replace one DMC color
+with another across the whole pattern. Undo/Redo are in the Edit menu
+(Ctrl+Z / Ctrl+Shift+Z).
 
 Project files (`.sstitch`, JSON) save the complete pattern state — grid,
 DMC/symbol assignments, and the originally imported sprite image — via

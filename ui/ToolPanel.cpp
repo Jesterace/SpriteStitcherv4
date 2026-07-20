@@ -1,5 +1,6 @@
 #include "ToolPanel.h"
 
+#include <QBrush>
 #include <QComboBox>
 #include <QCompleter>
 #include <QHBoxLayout>
@@ -36,7 +37,11 @@ ToolPanel::ToolPanel(QWidget* parent) : QWidget(parent) {
         if (selected.isEmpty()) return;
         const int row = selected.first()->row();
         auto* swatchItem = m_table->item(row, kColSwatch);
-        if (swatchItem) setActiveColor(swatchItem->data(kCodeRole).toString());
+        if (!swatchItem) return;
+        // Eraser row's code is deliberately empty (that's what "paint as
+        // unstitched" means to PatternModel) — the separate role is just
+        // to tell it apart here from "no row selected at all".
+        setActiveColor(swatchItem->data(kCodeRole).toString());
     });
 
     m_activeColorLabel = new QLabel(tr("Active color: none (click a palette row)"), this);
@@ -105,23 +110,35 @@ void ToolPanel::setPattern(core::pattern::PatternModel* pattern) {
         connect(m_pattern, &core::pattern::PatternModel::colorSwapped, this, &ToolPanel::refresh);
         connect(m_pattern, &core::pattern::PatternModel::cellsChanged, this, &ToolPanel::refresh);
     }
-    setActiveColor(QString());
+    resetSelection();
     refresh();
 }
 
-void ToolPanel::setActiveColor(const QString& dmcCode) {
-    if (m_activeColor == dmcCode) return;
-    m_activeColor = dmcCode;
-
+void ToolPanel::resetSelection() {
+    m_activeColor.clear();
+    m_hasActiveSelection = false;
     m_table->blockSignals(true);
     m_table->clearSelection();
-    if (!dmcCode.isEmpty()) {
-        for (int row = 0; row < m_table->rowCount(); ++row) {
-            auto* swatchItem = m_table->item(row, kColSwatch);
-            if (swatchItem && swatchItem->data(kCodeRole).toString() == dmcCode) {
-                m_table->selectRow(row);
-                break;
-            }
+    m_table->blockSignals(false);
+    updateActiveColorLabel();
+    updateSwapButtonEnabled();
+    emit activeColorChanged(m_activeColor);
+}
+
+void ToolPanel::setActiveColor(const QString& dmcCode) {
+    if (m_hasActiveSelection && m_activeColor == dmcCode) return;
+    m_activeColor = dmcCode;
+    m_hasActiveSelection = true;
+
+    // Exactly one row has an empty code (the eraser row), so this finds
+    // it correctly whether dmcCode is a real DMC code or the eraser's "".
+    m_table->blockSignals(true);
+    m_table->clearSelection();
+    for (int row = 0; row < m_table->rowCount(); ++row) {
+        auto* swatchItem = m_table->item(row, kColSwatch);
+        if (swatchItem && swatchItem->data(kCodeRole).toString() == dmcCode) {
+            m_table->selectRow(row);
+            break;
         }
     }
     m_table->blockSignals(false);
@@ -132,13 +149,19 @@ void ToolPanel::setActiveColor(const QString& dmcCode) {
 }
 
 void ToolPanel::updateActiveColorLabel() {
-    if (m_activeColor.isEmpty() || !m_dmcTable) {
+    if (!m_hasActiveSelection) {
         m_activeColorLabel->setText(tr("Active color: none (click a palette row)"));
         return;
     }
+    if (m_activeColor.isEmpty()) {
+        m_activeColorLabel->setText(tr("Active: Unstitched — click a cell to erase it"));
+        return;
+    }
     QString name = tr("Unknown");
-    if (auto c = m_dmcTable->findByCode(m_activeColor.toStdString())) {
-        name = QString::fromLatin1(c->name);
+    if (m_dmcTable) {
+        if (auto c = m_dmcTable->findByCode(m_activeColor.toStdString())) {
+            name = QString::fromLatin1(c->name);
+        }
     }
     m_activeColorLabel->setText(tr("Active color: DMC %1 %2 — click a cell to paint it").arg(m_activeColor, name));
 }
@@ -155,9 +178,31 @@ void ToolPanel::refresh() {
 
     const auto counts = m_pattern->colorCounts();
     const auto& symbols = m_pattern->symbolMap();
+    const int blanks = m_pattern->blankCellCount();
 
-    m_table->setRowCount(counts.size());
+    m_table->setRowCount(counts.size() + (blanks > 0 ? 1 : 0));
     int row = 0;
+
+    if (blanks > 0) {
+        // Synthetic row, not a real DMC entry: selecting it arms the
+        // eraser (paint cells as unstitched via an empty dmcCode).
+        auto* swatchItem = new QTableWidgetItem();
+        swatchItem->setBackground(QBrush(Qt::lightGray, Qt::DiagCrossPattern));
+        swatchItem->setData(kCodeRole, QString());
+        m_table->setItem(row, kColSwatch, swatchItem);
+        m_table->setItem(row, kColCode, new QTableWidgetItem(QStringLiteral("—")));
+        m_table->setItem(row, kColName, new QTableWidgetItem(tr("Unstitched")));
+        m_table->setItem(row, kColSymbol, new QTableWidgetItem());
+        auto* countItem = new QTableWidgetItem();
+        countItem->setData(Qt::DisplayRole, blanks);
+        m_table->setItem(row, kColCount, countItem);
+
+        if (m_hasActiveSelection && m_activeColor.isEmpty()) {
+            m_table->selectRow(row);
+        }
+        ++row;
+    }
+
     for (auto it = counts.constBegin(); it != counts.constEnd(); ++it, ++row) {
         const QString& code = it.key();
         const int count = it.value();
@@ -180,7 +225,7 @@ void ToolPanel::refresh() {
         countItem->setData(Qt::DisplayRole, count);
         m_table->setItem(row, kColCount, countItem);
 
-        if (code == m_activeColor) {
+        if (m_hasActiveSelection && code == m_activeColor) {
             m_table->selectRow(row);
         }
     }

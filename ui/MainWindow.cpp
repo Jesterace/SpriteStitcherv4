@@ -5,6 +5,7 @@
 #include "ToolPanel.h"
 #include "dialogs/ImportOptionsDialog.h"
 
+#include "ss/core/image/BackgroundDetector.h"
 #include "ss/core/image/ImageLoader.h"
 #include "ss/core/pdf/PdfExporter.h"
 #include "ss/core/project/ProjectSerializer.h"
@@ -160,11 +161,19 @@ void MainWindow::openImage() {
     ImportOptionsDialog dialog(this);
     if (dialog.exec() != QDialog::Accepted) return;
 
+    // Background removal only affects what gets fed into color reduction
+    // (as newly-transparent pixels, which reduceExact/reduceMedianCut
+    // already treat as unstitched) — the sprite reference panel keeps
+    // showing the untouched original image.
+    const QImage forReduction = dialog.removeBackground()
+        ? core::image::BackgroundDetector::removeSolidBackground(loaded->image)
+        : loaded->image;
+
     core::quantize::ReductionResult reduction;
     if (dialog.mode() == ImportOptionsDialog::Mode::Exact) {
-        reduction = ColorReducer::reduceExact(loaded->image);
+        reduction = ColorReducer::reduceExact(forReduction);
     } else {
-        reduction = ColorReducer::reduceMedianCut(loaded->image, dialog.targetColorCount());
+        reduction = ColorReducer::reduceMedianCut(forReduction, dialog.targetColorCount());
     }
 
     m_spriteImage = loaded->image;
@@ -289,7 +298,7 @@ void MainWindow::onCellHovered(int x, int y) {
     }
     const auto& cell = m_pattern.cellAt(x, y);
     if (cell.dmcCode.isEmpty()) {
-        m_statusCoord->setText(tr("(%1, %2)").arg(x).arg(y));
+        m_statusCoord->setText(tr("(%1, %2)  unstitched").arg(x).arg(y));
         return;
     }
     QString name;
@@ -304,14 +313,16 @@ void MainWindow::onCellClicked(int x, int y, Qt::MouseButton button) {
     if (!m_pattern.isValidCoord(x, y)) return;
 
     if (button == Qt::LeftButton) {
-        // Paint with the active color, if one is selected in the palette.
+        // Paint with the active color (or erase, if that's what's active),
+        // if anything is selected in the palette.
+        if (!m_toolPanel->hasActiveSelection()) return;
         const QString activeColor = m_toolPanel->activeColor();
-        if (activeColor.isEmpty() || activeColor == m_pattern.cellAt(x, y).dmcCode) return;
+        if (activeColor == m_pattern.cellAt(x, y).dmcCode) return;
         m_undoStack.push(new core::undo::RecolorCellCommand(&m_pattern, x, y, activeColor));
     } else if (button == Qt::RightButton) {
-        // Eyedropper: pick up this cell's color as the new active color.
-        const QString code = m_pattern.cellAt(x, y).dmcCode;
-        if (!code.isEmpty()) m_toolPanel->setActiveColor(code);
+        // Eyedropper: pick up this cell's color (or "unstitched") as the
+        // new active color.
+        m_toolPanel->setActiveColor(m_pattern.cellAt(x, y).dmcCode);
     }
 }
 
@@ -326,10 +337,16 @@ void MainWindow::onZoomChanged(double pixelsPerCell) {
 void MainWindow::updateStatusSummary() {
     const int w = m_pattern.width();
     const int h = m_pattern.height();
-    const int stitches = w * h;
-    const int colors = m_pattern.colorCounts().size();
-    m_statusSummary->setText(
-        tr("%1 × %2 stitches — %3 total — %4 colors").arg(w).arg(h).arg(stitches).arg(colors));
+    const auto counts = m_pattern.colorCounts();
+    int stitches = 0;
+    for (int c : counts) stitches += c;
+    const int blanks = m_pattern.blankCellCount();
+
+    QString text = tr("%1 × %2 — %3 stitches — %4 colors").arg(w).arg(h).arg(stitches).arg(counts.size());
+    if (blanks > 0) {
+        text += tr(" — %1 unstitched").arg(blanks);
+    }
+    m_statusSummary->setText(text);
 }
 
 } // namespace ss::ui

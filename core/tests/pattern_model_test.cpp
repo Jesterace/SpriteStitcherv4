@@ -72,6 +72,53 @@ int main() {
         ++failures;
     }
 
+    // Blank/unstitched cells: a transparent source pixel must produce an
+    // empty dmcCode and no symbol, must be excluded from colorCounts(),
+    // and must be counted by blankCellCount().
+    {
+        QImage withBackground(2, 2, QImage::Format_ARGB32);
+        withBackground.setPixel(0, 0, qRgba(0, 0, 0, 255));   // -> DMC 310 Black
+        withBackground.setPixel(1, 0, qRgba(0, 0, 0, 0));     // transparent -> blank
+        withBackground.setPixel(0, 1, qRgba(0, 0, 0, 255));
+        withBackground.setPixel(1, 1, qRgba(0, 0, 0, 0));
+
+        const auto bgReduction = quantize::ColorReducer::reduceExact(withBackground);
+        pattern::PatternModel bgModel;
+        bgModel.buildFromReduction(bgReduction, matcher, "bg-test");
+
+        if (!bgModel.cellAt(1, 0).dmcCode.isEmpty()) {
+            std::fprintf(stderr, "FAIL blank: transparent pixel should produce an empty dmcCode, got %s\n",
+                         qPrintable(bgModel.cellAt(1, 0).dmcCode));
+            ++failures;
+        }
+        if (!bgModel.cellAt(1, 0).symbol.isEmpty()) {
+            std::fprintf(stderr, "FAIL blank: blank cell should have no symbol\n");
+            ++failures;
+        }
+        if (bgModel.blankCellCount() != 2) {
+            std::fprintf(stderr, "FAIL blank: expected blankCellCount()==2, got %d\n", bgModel.blankCellCount());
+            ++failures;
+        }
+        int bgTotal = 0;
+        for (int v : bgModel.colorCounts()) bgTotal += v;
+        if (bgTotal != 2) {
+            std::fprintf(stderr, "FAIL blank: colorCounts() should exclude blanks (expected sum 2, got %d)\n", bgTotal);
+            ++failures;
+        }
+
+        // Manual erase via setCellColor("") must also leave no symbol and
+        // not register a bogus DMC code in the symbol map.
+        bgModel.setCellColor(0, 0, QString());
+        if (!bgModel.cellAt(0, 0).dmcCode.isEmpty() || !bgModel.cellAt(0, 0).symbol.isEmpty()) {
+            std::fprintf(stderr, "FAIL blank: manual erase via setCellColor(\"\") did not blank the cell\n");
+            ++failures;
+        }
+        if (bgModel.symbolMap().contains(QString())) {
+            std::fprintf(stderr, "FAIL blank: symbol map should never contain an entry for the empty code\n");
+            ++failures;
+        }
+    }
+
     if (failures) {
         std::fprintf(stderr, "%d failures\n", failures);
         return 1;

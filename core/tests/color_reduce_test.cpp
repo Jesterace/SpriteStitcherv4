@@ -58,6 +58,62 @@ int main() {
         ++failures;
     }
 
+    // Transparent pixels are background, not a color: excluded from the
+    // palette entirely and marked with kBlankIndex.
+    {
+        QImage withAlpha(2, 2, QImage::Format_ARGB32);
+        withAlpha.setPixel(0, 0, qRgba(255, 0, 0, 255));
+        withAlpha.setPixel(1, 0, qRgba(0, 0, 0, 0));   // fully transparent
+        withAlpha.setPixel(0, 1, qRgba(0, 255, 0, 255));
+        withAlpha.setPixel(1, 1, qRgba(10, 10, 10, 5)); // near-fully transparent
+
+        const auto result = ColorReducer::reduceExact(withAlpha);
+        if (result.palette.size() != 2) {
+            std::fprintf(stderr, "FAIL alpha/exact: expected 2 palette colors (transparent pixels excluded), got %zu\n",
+                         result.palette.size());
+            ++failures;
+        }
+        if (result.paletteIndex[1] != ReductionResult::kBlankIndex) {
+            std::fprintf(stderr, "FAIL alpha/exact: fully transparent pixel was not marked blank\n");
+            ++failures;
+        }
+        if (result.paletteIndex[3] != ReductionResult::kBlankIndex) {
+            std::fprintf(stderr, "FAIL alpha/exact: near-transparent pixel was not marked blank\n");
+            ++failures;
+        }
+        if (result.paletteIndex[0] == ReductionResult::kBlankIndex || result.paletteIndex[2] == ReductionResult::kBlankIndex) {
+            std::fprintf(stderr, "FAIL alpha/exact: opaque pixel incorrectly marked blank\n");
+            ++failures;
+        }
+
+        const auto medianResult = ColorReducer::reduceMedianCut(withAlpha, 4);
+        if (medianResult.palette.size() != 2) {
+            std::fprintf(stderr, "FAIL alpha/median-cut: expected 2 palette colors, got %zu\n",
+                         medianResult.palette.size());
+            ++failures;
+        }
+        if (medianResult.paletteIndex[1] != ReductionResult::kBlankIndex ||
+            medianResult.paletteIndex[3] != ReductionResult::kBlankIndex) {
+            std::fprintf(stderr, "FAIL alpha/median-cut: transparent pixels were not marked blank\n");
+            ++failures;
+        }
+    }
+
+    // All-transparent source shouldn't crash and should mark every pixel
+    // blank with an empty (or harmlessly unused) palette.
+    {
+        QImage allTransparent(3, 3, QImage::Format_ARGB32);
+        allTransparent.fill(qRgba(0, 0, 0, 0));
+        const auto result = ColorReducer::reduceMedianCut(allTransparent, 8);
+        for (int idx : result.paletteIndex) {
+            if (idx != ReductionResult::kBlankIndex) {
+                std::fprintf(stderr, "FAIL all-transparent: expected every pixel blank, got index %d\n", idx);
+                ++failures;
+                break;
+            }
+        }
+    }
+
     if (failures) {
         std::fprintf(stderr, "%d failures\n", failures);
         return 1;

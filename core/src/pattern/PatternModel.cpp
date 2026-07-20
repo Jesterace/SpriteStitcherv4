@@ -32,8 +32,14 @@ void PatternModel::buildFromReduction(const quantize::ReductionResult& reduction
         paletteToCode[i] = QString::fromLatin1(dmc.code);
     }
 
+    // A negative palette index (quantize::ReductionResult::kBlankIndex)
+    // marks a transparent/background source pixel — leave dmcCode empty,
+    // i.e. no stitch there.
     for (size_t i = 0; i < reduction.paletteIndex.size(); ++i) {
-        m_cells[i].dmcCode = paletteToCode[static_cast<size_t>(reduction.paletteIndex[i])];
+        const int paletteIdx = reduction.paletteIndex[i];
+        if (paletteIdx >= 0) {
+            m_cells[i].dmcCode = paletteToCode[static_cast<size_t>(paletteIdx)];
+        }
     }
 
     rebuildSymbolMapFromGrid();
@@ -74,7 +80,10 @@ const PatternCell& PatternModel::cellAt(int x, int y) const {
 void PatternModel::setCellColor(int x, int y, const QString& dmcCode) {
     if (!isValidCoord(x, y)) return;
 
-    if (!m_symbolMap.contains(dmcCode)) {
+    // Empty dmcCode means "blank / no stitch" — it never gets a symbol,
+    // and must never be handed to SymbolAssigner (which assumes every
+    // code it's given is a real color to distinguish on the chart).
+    if (!dmcCode.isEmpty() && !m_symbolMap.contains(dmcCode)) {
         QVector<QString> codes = m_symbolMap.keys().toVector();
         codes.push_back(dmcCode);
         m_symbolMap = SymbolAssigner::assign(codes, m_symbolMap);
@@ -82,7 +91,7 @@ void PatternModel::setCellColor(int x, int y, const QString& dmcCode) {
 
     auto& cell = m_cells[indexOf(x, y)];
     cell.dmcCode = dmcCode;
-    cell.symbol = m_symbolMap.value(dmcCode);
+    cell.symbol = dmcCode.isEmpty() ? QString() : m_symbolMap.value(dmcCode);
 
     emit cellChanged(x, y);
 }
@@ -90,12 +99,12 @@ void PatternModel::setCellColor(int x, int y, const QString& dmcCode) {
 void PatternModel::setCellsColor(const std::vector<QPoint>& cells, const QString& dmcCode) {
     if (cells.empty()) return;
 
-    if (!m_symbolMap.contains(dmcCode)) {
+    if (!dmcCode.isEmpty() && !m_symbolMap.contains(dmcCode)) {
         QVector<QString> codes = m_symbolMap.keys().toVector();
         codes.push_back(dmcCode);
         m_symbolMap = SymbolAssigner::assign(codes, m_symbolMap);
     }
-    const QString symbol = m_symbolMap.value(dmcCode);
+    const QString symbol = dmcCode.isEmpty() ? QString() : m_symbolMap.value(dmcCode);
 
     for (const QPoint& p : cells) {
         if (!isValidCoord(p.x(), p.y())) continue;
@@ -136,6 +145,14 @@ QMap<QString, int> PatternModel::colorCounts() const {
         counts[cell.dmcCode]++;
     }
     return counts;
+}
+
+int PatternModel::blankCellCount() const {
+    int count = 0;
+    for (const auto& cell : m_cells) {
+        if (cell.dmcCode.isEmpty()) ++count;
+    }
+    return count;
 }
 
 void PatternModel::rebuildSymbolMapFromGrid() {

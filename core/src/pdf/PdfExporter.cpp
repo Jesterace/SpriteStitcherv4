@@ -138,25 +138,30 @@ void drawChartTile(HPDF_Page page, HPDF_Font regular, const dmc::DmcTable& table
         for (int rx = 0; rx < cols; ++rx) {
             const int x = tile.startCol + rx;
             const auto& cell = pattern.cellAt(x, y);
-            const RGB rgb = colorForCode(table, cell.dmcCode);
             const double cellTopDown = top + ry * cellPt;
             const double cellLeft = left + rx * cellPt;
 
-            HPDF_Page_SetRGBFill(page, rgb.r, rgb.g, rgb.b);
-            HPDF_Page_Rectangle(page, cellLeft, rectBottomY(cellTopDown, cellPt, pageHeight), cellPt, cellPt);
-            HPDF_Page_Fill(page);
+            // Blank (unstitched) cells are left unfilled — the page's
+            // white background shows through, no symbol — matching
+            // GridView and the printed-chart convention.
+            if (!cell.dmcCode.isEmpty()) {
+                const RGB rgb = colorForCode(table, cell.dmcCode);
+                HPDF_Page_SetRGBFill(page, rgb.r, rgb.g, rgb.b);
+                HPDF_Page_Rectangle(page, cellLeft, rectBottomY(cellTopDown, cellPt, pageHeight), cellPt, cellPt);
+                HPDF_Page_Fill(page);
 
-            if (cellPt >= 8.0 && !cell.symbol.isEmpty()) {
-                const double fontSize = cellPt * 0.6;
-                HPDF_Page_SetFontAndSize(page, regular, fontSize);
-                const QByteArray sym = cell.symbol.toLatin1();
-                const double textWidth = HPDF_Page_TextWidth(page, sym.constData());
-                const double textX = cellLeft + (cellPt - textWidth) / 2.0;
-                const double textTopDown = cellTopDown + cellPt * 0.72;
+                if (cellPt >= 8.0 && !cell.symbol.isEmpty()) {
+                    const double fontSize = cellPt * 0.6;
+                    HPDF_Page_SetFontAndSize(page, regular, fontSize);
+                    const QByteArray sym = cell.symbol.toLatin1();
+                    const double textWidth = HPDF_Page_TextWidth(page, sym.constData());
+                    const double textX = cellLeft + (cellPt - textWidth) / 2.0;
+                    const double textTopDown = cellTopDown + cellPt * 0.72;
 
-                if (isLight(rgb)) HPDF_Page_SetRGBFill(page, 0, 0, 0);
-                else HPDF_Page_SetRGBFill(page, 1, 1, 1);
-                drawText(page, textX, toPdfY(textTopDown, pageHeight), sym.constData());
+                    if (isLight(rgb)) HPDF_Page_SetRGBFill(page, 0, 0, 0);
+                    else HPDF_Page_SetRGBFill(page, 1, 1, 1);
+                    drawText(page, textX, toPdfY(textTopDown, pageHeight), sym.constData());
+                }
             }
         }
     }

@@ -21,3 +21,7 @@ add_test(NAME undo_test COMMAND undo_test)
 add_executable(project_serializer_test project_serializer_test.cpp)
 target_link_libraries(project_serializer_test PRIVATE sscore)
 add_test(NAME project_serializer_test COMMAND project_serializer_test)
+
+add_executable(background_detector_test background_detector_test.cpp)
+target_link_libraries(background_detector_test PRIVATE sscore)
+add_test(NAME background_detector_test COMMAND background_detector_test)

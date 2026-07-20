@@ -7,6 +7,17 @@ namespace ss::core::quantize {
 
 namespace {
 
+// Pixels at or below this alpha are treated as background/unstitched
+// rather than as a color to match. Pixel art alpha is almost always
+// either 0 or 255 (no soft-edged anti-aliasing), so an exact "0" test
+// would also work, but a small tolerance is harmless and covers the
+// occasional near-transparent edge pixel from a lossy export.
+constexpr int kAlphaBlankThreshold = 16;
+
+bool isBlank(QRgb pixel) {
+    return qAlpha(pixel) <= kAlphaBlankThreshold;
+}
+
 struct ColorCount {
     QRgb color;
     int count;
@@ -92,7 +103,8 @@ std::unordered_map<QRgb, int> buildHistogram(const QImage& image) {
     for (int y = 0; y < image.height(); ++y) {
         const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
         for (int x = 0; x < image.width(); ++x) {
-            hist[row[x] | 0xFF000000]++; // ignore alpha for palette purposes
+            if (isBlank(row[x])) continue;
+            hist[row[x] | 0xFF000000]++; // ignore alpha for palette purposes among stitched pixels
         }
     }
     return hist;
@@ -112,6 +124,11 @@ ReductionResult ColorReducer::reduceExact(const QImage& image) {
     for (int y = 0; y < image.height(); ++y) {
         const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
         for (int x = 0; x < image.width(); ++x) {
+            const size_t pixelIdx = static_cast<size_t>(y) * result.width + x;
+            if (isBlank(row[x])) {
+                result.paletteIndex[pixelIdx] = ReductionResult::kBlankIndex;
+                continue;
+            }
             const QRgb color = row[x] | 0xFF000000;
             auto it = colorToIndex.find(color);
             int idx;
@@ -122,7 +139,7 @@ ReductionResult ColorReducer::reduceExact(const QImage& image) {
             } else {
                 idx = it->second;
             }
-            result.paletteIndex[static_cast<size_t>(y) * result.width + x] = idx;
+            result.paletteIndex[pixelIdx] = idx;
         }
     }
     return result;
@@ -174,8 +191,13 @@ ReductionResult ColorReducer::reduceMedianCut(const QImage& image, int targetCol
     for (int y = 0; y < image.height(); ++y) {
         const QRgb* row = reinterpret_cast<const QRgb*>(image.constScanLine(y));
         for (int x = 0; x < image.width(); ++x) {
+            const size_t pixelIdx = static_cast<size_t>(y) * result.width + x;
+            if (isBlank(row[x])) {
+                result.paletteIndex[pixelIdx] = ReductionResult::kBlankIndex;
+                continue;
+            }
             const QRgb color = row[x] | 0xFF000000;
-            result.paletteIndex[static_cast<size_t>(y) * result.width + x] = colorToIndex.at(color);
+            result.paletteIndex[pixelIdx] = colorToIndex.at(color);
         }
     }
 

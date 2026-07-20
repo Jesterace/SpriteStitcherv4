@@ -137,7 +137,12 @@ void GridView::paintEvent(QPaintEvent*) {
                 const QRectF cellRect(area.left() + x * cellSize - offsetX,
                                        area.top() + y * cellSize - offsetY,
                                        cellSize, cellSize);
-                painter.fillRect(cellRect, QColor(colorForCode(cell.dmcCode)));
+                // Blank (unstitched) cells are left as the plain white
+                // background already painted above them — no fill, no
+                // symbol — same convention printed charts use.
+                if (!cell.dmcCode.isEmpty()) {
+                    painter.fillRect(cellRect, QColor(colorForCode(cell.dmcCode)));
+                }
 
                 if (drawSymbols && !cell.symbol.isEmpty()) {
                     const QColor bg(colorForCode(cell.dmcCode));
