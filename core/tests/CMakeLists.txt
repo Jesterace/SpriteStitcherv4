@@ -1,0 +1,11 @@
+add_executable(dmc_match_test dmc_match_test.cpp)
+target_link_libraries(dmc_match_test PRIVATE sscore)
+add_test(NAME dmc_match_test COMMAND dmc_match_test)
+
+add_executable(color_reduce_test color_reduce_test.cpp)
+target_link_libraries(color_reduce_test PRIVATE sscore)
+add_test(NAME color_reduce_test COMMAND color_reduce_test)
+
+add_executable(pattern_model_test pattern_model_test.cpp)
+target_link_libraries(pattern_model_test PRIVATE sscore)
+add_test(NAME pattern_model_test COMMAND pattern_model_test)

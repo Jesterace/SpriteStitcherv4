@@ -1,0 +1,33 @@
+build/
+build-*/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+compile_commands.json
+Makefile
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Qt
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+.qmake.stash
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# CLI tooling (local-only settings; shared .claude/settings.json, if added, stays tracked)
+.claude/settings.local.json
